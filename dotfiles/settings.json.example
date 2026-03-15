@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "_comment": "Global Claude Code settings. Symlinked to ~/.claude/settings.json",
+  "_docs": "https://docs.anthropic.com/en/docs/claude-code/settings",
+
+  "permissions": {
+    "_comment": "Start restrictive, open up as needed. Project-level overrides in settings.local.json",
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(git *)",
+      "Bash(date *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)"
+    ]
+  },
+
+  "hooks": {
+    "_comment": "Hooks run shell commands on events. Example: session start briefing",
+    "SessionStart": []
+  }
+}

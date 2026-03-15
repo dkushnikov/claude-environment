@@ -1,0 +1,15 @@
+# Machine-specific (created by install.sh)
+dotfiles/rules/environment.md
+dotfiles/CLAUDE.md
+dotfiles/settings.json
+
+# Secrets
+*.env
+.env.*
+config/
+
+# OS
+.DS_Store
+
+# Python
+__pycache__/

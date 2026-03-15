@@ -1,0 +1,39 @@
+{
+  "calendars": {
+    "personal": [
+      {
+        "id": "your.email@gmail.com",
+        "name": "Personal",
+        "sync": "full",
+        "description": "Main personal calendar"
+      },
+      {
+        "id": "other.email@gmail.com",
+        "name": "Private",
+        "sync": "full",
+        "description": "Private events"
+      }
+    ],
+    "work": [
+      {
+        "id": "you@company.com",
+        "name": "Work",
+        "sync": "summary",
+        "description": "Work meetings — summary only (details in work vault)"
+      }
+    ],
+    "skip": [
+      {
+        "id": "holidays@import.calendar.google.com",
+        "name": "Holidays",
+        "sync": "none"
+      }
+    ]
+  },
+  "sync": {
+    "routine_patterns": ["Sleeping", "Sleep block", "Walking time", "Breakfast time", "Dinner time"],
+    "future_days": 14,
+    "past_days": 3,
+    "timezone": "Europe/London"
+  }
+}

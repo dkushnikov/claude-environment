@@ -1,0 +1,23 @@
+# Environment: [Machine Name]
+
+- machine: [friendly name, e.g., "laptop", "home-server"]
+- hostname: [hostname]
+- role: [interactive | background]
+  - interactive: primary work machine, human present
+  - background: always-on server, runs cron jobs, no human
+- hardware: [model, RAM — helps Claude understand capabilities]
+- services: [what runs here — e.g., "Obsidian GUI, iCloud Drive"]
+- vaults: [which Obsidian vaults are on this machine]
+
+## Role-specific behavior
+
+### If interactive:
+- Full UI access (Obsidian CLI, browser)
+- MCP servers available for fallback
+- Can prompt user for input
+
+### If background:
+- No UI, no browser, no user prompts
+- Read from cached/synced data only
+- Claude Code runs headless (`claude -p`)
+- All output to log files

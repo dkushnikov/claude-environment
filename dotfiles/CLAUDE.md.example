@@ -1,0 +1,30 @@
+# Global Context for Claude Code
+
+## About Me
+- Name: [Your Name]
+- Role: [Your role / what you do]
+- Location: [City, Country]
+
+## Communication Style
+
+- Direct, no fluff
+- Challenge my assumptions when appropriate
+- Lead with conclusion, then supporting reasoning
+- Keep it actionable
+
+## Working Principles
+- [Your key principles — e.g., "Data-driven decisions", "Bias for action"]
+
+## What I Never Want
+- Generic advice — be specific to my context
+- Summaries of what you just did — show results, not narration
+- Asking permission for read operations — just read and act
+
+## Date Awareness
+Always run `date +%Y-%m-%d` at the start of any task involving dates.
+Never assume the date — verify.
+
+---
+
+**Note:** Domain-specific context is in each project's CLAUDE.md.
+Machine-specific context is in `rules/environment.md`.
