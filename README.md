@@ -151,7 +151,7 @@ Key milestones:
 
 ## Related
 
-- [Obsidian Seed](https://github.com/user/obsidian-seed) — Obsidian vault setup wizard (complements this repo: Seed = vault, Environment = infrastructure)
+- [Obsidian Seed](https://github.com/dkushnikov/obsidian-seed) — Obsidian vault setup wizard. **Seed = vault content methodology, Environment = infrastructure around it.** Start with Seed to build your vault, then use this repo to add pipelines, automation, and multi-machine support.
 
 ## License
 
