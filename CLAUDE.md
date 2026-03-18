@@ -7,23 +7,30 @@ Framework for running Claude Code across multiple machines with data pipelines, 
 ## Repo structure
 
 ```
-├── dotfiles/           # Claude Code config (symlinked to ~/.claude/)
-│   ├── bin/            # Scripts (session briefing, calendar sync, plaud sync)
-│   ├── rules/          # Auto-loaded rules (session onboarding, guardrails)
-│   ├── skills/         # Global skills (universal, not domain-specific)
-│   ├── templates/      # Project-level settings templates
-│   └── launchd/        # LaunchAgent plists (macOS cron)
+├── dotfiles/           # Claude Code config examples (user symlinks to ~/.claude/)
+│   ├── CLAUDE.md.example       # Global CLAUDE.md template
+│   ├── settings.json.example   # Global settings template
+│   ├── rules/
+│   │   └── environment.md.example  # Machine identity template
+│   ├── skills/
+│   │   └── example-skill/      # Skill file structure example
+│   └── templates/              # Project-level settings templates
+│       ├── settings.local.obsidian.json
+│       └── settings.local.coding.json
 ├── docs/               # Architecture, decisions, security, guides
-├── pipelines/          # Data integration patterns (calendar, health, voice)
+├── pipelines/          # Data integration patterns
 │   ├── calendar/       # Google Calendar → per-day JSON (reference implementation)
 │   ├── health/         # Oura/Apple Health (pattern description)
 │   └── voice/          # Voice recorder transcripts (pattern description)
-├── jobs/               # Cron job wrappers (server only)
+├── jobs/               # Cron job wrappers (examples, server only)
 ├── multi-machine/      # Multi-machine sync patterns
 ├── install.sh          # Dotfiles installer (symlinks + backup)
 ├── server-setup.sh     # Server bootstrap (deploy key, LaunchAgents, symlinks)
 └── check.sh            # Validation script
 ```
+
+Note: The author's private dotfiles (actual bin/, rules/, launchd/) are not in this repo.
+This repo provides templates and examples; users build their own dotfiles from these.
 
 ## Conventions
 
