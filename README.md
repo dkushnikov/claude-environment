@@ -95,10 +95,13 @@ See [dotfiles/](dotfiles/).
 |-------|---------------|
 | [Session Workflow](docs/session-workflow.md) | Stateful sessions: TODO.md, session logs, MEMORY.md, start/end protocols |
 | [Hooks](docs/hooks.md) | Session briefing, auto-format, date injection, lifecycle events |
+| [Architecture](docs/architecture.md) | Layered model, devices, configs, skills, company scaling, extensibility |
 | [Framework](docs/FRAMEWORK.md) | Full technical reference: layered model, identity, scaling |
 | [Principles](docs/principles.md) | 10 design principles with rationale |
 | [Decisions](docs/decisions.md) | Decision log (D1-D19) |
 | [Security](docs/security.md) | Secrets, data classification, trust model |
+| [Integrations](docs/integrations.md) | Service categorization: Person / Shared / Role / Infrastructure |
+| [Research](docs/research.md) | Community patterns, tool evaluations, future research |
 
 ### Pipelines (data integration)
 
