@@ -1,5 +1,7 @@
 # Voice Pipeline
 
+> **Status: pattern description only.** No runnable code yet. See [Calendar pipeline](../calendar/) for a working reference implementation.
+
 Voice recordings (diary, meetings, memos) → transcripts + metadata → vault notes.
 
 ## Pattern

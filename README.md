@@ -85,8 +85,20 @@ Templates for Claude Code configuration that sync across machines via git.
 | `settings.json.example` | Permissions, allowed tools, MCP servers |
 | `rules/environment.md.example` | Machine identity: name, role, hardware |
 | `skills/` | Example skills (reusable prompt templates) |
+| `templates/` | Project-level `settings.local.json` templates (Obsidian vault, coding project) |
 
 See [dotfiles/](dotfiles/).
+
+### Guides
+
+| Guide | What it covers |
+|-------|---------------|
+| [Session Workflow](docs/session-workflow.md) | Stateful sessions: TODO.md, session logs, MEMORY.md, start/end protocols |
+| [Hooks](docs/hooks.md) | Session briefing, auto-format, date injection, lifecycle events |
+| [Framework](docs/FRAMEWORK.md) | Full technical reference: layered model, identity, scaling |
+| [Principles](docs/principles.md) | 10 design principles with rationale |
+| [Decisions](docs/decisions.md) | Decision log (D1-D19) |
+| [Security](docs/security.md) | Secrets, data classification, trust model |
 
 ### Pipelines (data integration)
 

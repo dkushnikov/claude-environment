@@ -1,5 +1,7 @@
 # Health Pipeline
 
+> **Status: pattern description only.** No runnable code yet. See [Calendar pipeline](../calendar/) for a working reference implementation.
+
 Wearable + health app data → structured metrics → cross-reference with calendar and diary.
 
 ## Pattern
