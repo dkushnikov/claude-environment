@@ -1,0 +1,38 @@
+{
+  "_comment": "Project-level settings for an Obsidian vault. Place at .claude/settings.local.json",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(obsidian:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(date:*)",
+      "Bash(wc:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Write(_claude/**)",
+      "Edit(_claude/**)",
+      "Write(Reflections/**)",
+      "Edit(Reflections/**)"
+    ],
+    "deny": [
+      "Read($HOME/.ssh/**)",
+      "Read($HOME/.aws/**)",
+      "Read($HOME/.gnupg/**)",
+      "Edit($HOME/.ssh/**)",
+      "Write($HOME/.ssh/**)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Session started'"
+          }
+        ]
+      }
+    ]
+  }
+}

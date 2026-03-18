@@ -1,0 +1,30 @@
+{
+  "_comment": "Project-level settings for a coding project. Place at .claude/settings.local.json",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(python3:*)",
+      "Bash(pip:*)",
+      "Bash(git:*)",
+      "Bash(make:*)",
+      "Bash(docker:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(date:*)",
+      "Bash(curl:*)",
+      "Bash(jq:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(git push --force *)",
+      "Read($HOME/.ssh/**)",
+      "Read($HOME/.aws/**)",
+      "Read($HOME/.env)"
+    ]
+  }
+}
