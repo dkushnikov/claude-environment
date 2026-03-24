@@ -21,6 +21,65 @@ The laptop is where you work. The server is where automation runs while you slee
 | Secrets (API tokens, credentials) | Never synced | Machine-local only |
 | Machine identity (`environment.md`) | Never synced | `.gitignore`d |
 
+## Sync Architecture
+
+The key insight: **Obsidian Sync and Git serve different purposes and operate on different timescales.** Don't make them compete.
+
+```
+┌──────────────────────────────────────────────────┐
+│  Layer 1: Obsidian Sync (real-time)              │
+│  Content sync between all devices. Source of     │
+│  truth for vault content. Seconds.               │
+├──────────────────────────────────────────────────┤
+│  Layer 2: Git (async archive)                    │
+│  One machine commits (laptop). Others pull only. │
+│  History, backup, rollback. Hours/days.          │
+├──────────────────────────────────────────────────┤
+│  Layer 3: File sync (data pipelines)             │
+│  iCloud/Dropbox for large files (audio, exports).│
+│  Everything in _inputs/, gitignored.             │
+└──────────────────────────────────────────────────┘
+```
+
+**Single git committer.** The laptop commits with descriptive messages. The server does `git pull --ff-only` daily via cron. Zero merge conflicts by construction — two machines committing to the same repo is asking for trouble.
+
+```
+Laptop (interactive)  → commit → push → GitHub
+                                           ↑
+Server (daily cron)   → git pull --ff-only ─┘
+```
+
+Server-generated files (cron reflections, audit reports) flow back via Obsidian Sync → laptop → committed in the next interactive session. Git is for history and rollback, not real-time sync.
+
+**Vault-pull job** on the server keeps git state current for `git log` / `git blame`:
+
+```bash
+#!/bin/bash
+# vault-pull.sh — daily at 04:00
+for vault in ~/Obsidian/*; do
+    [[ -d "$vault/.git" ]] && cd "$vault" && git pull --ff-only
+done
+```
+
+## Session Awareness
+
+When multiple Claude sessions can write to the same vault (laptop interactive + server Telegram bot + cron), use a marker file so sessions know about each other:
+
+```
+_claude/.active-session.json
+```
+
+```json
+{
+  "machine": "server",
+  "channel": "telegram",
+  "started": "2026-03-23T22:00:00Z",
+  "session_id": "abc-123"
+}
+```
+
+Each session writes this at start, deletes at end. Other sessions read it to know the vault is being actively edited. Not a lock — just awareness. Gitignored.
+
 ## Machine identity
 
 Each machine has `rules/environment.md` (gitignored) that tells Claude where it's running:

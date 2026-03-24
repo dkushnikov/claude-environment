@@ -79,6 +79,23 @@ For organization-wide rollout:
 | Sales | Pipeline, outreach, proposals | CRM, email sequences |
 | Finance | Financial analysis, budgeting | Accounting, payroll, banking |
 
+## Sync Architecture
+
+Multi-device sync uses three non-competing layers. Full details in [multi-machine/](../multi-machine/README.md#sync-architecture).
+
+| Layer | Mechanism | Speed | Who writes |
+|-------|-----------|-------|------------|
+| Vault content | Obsidian Sync | Seconds | All devices |
+| Version history | Git | Hours/days | Laptop only (single committer) |
+| Data pipelines | iCloud / local files | Minutes | Cron jobs |
+
+Key decisions:
+- **D17:** Single git committer — laptop commits, server `pull --ff-only`. Zero merge conflicts
+- **D18:** Obsidian app on server as LaunchAgent — enables Sync + CLI
+- **D19:** Telegram bot (persistent Claude session) for mobile access
+- **D20:** Applet wrappers must use `try/on error` — see [jobs/](../jobs/README.md#macos-icloud-drive-and-tcc)
+- **D21:** No Syncthing — iCloud + FDA covers data pipeline sync needs
+
 ## Configurations
 
 Jobs map to configurations. Each config = a CWD + layers combination.

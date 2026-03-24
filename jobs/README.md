@@ -96,6 +96,66 @@ claude -p "Run /daily-reflection for today" \
 
 **Gotcha:** headless Claude can't access keychain-based credentials or MCP servers that require browser auth. Design your pipeline so the agent reads from local files (L2), not from APIs.
 
+## macOS: iCloud Drive and TCC
+
+LaunchAgent processes can't access `~/Library/Mobile Documents/` (iCloud Drive) by default. macOS TCC (Transparency, Consent, and Control) blocks it — even if your interactive terminal has access.
+
+**Symptom:** `PermissionError: [Errno 1] Operation not permitted` in cron logs for any script that reads/writes iCloud Drive paths.
+
+**Solution:** Wrap your job in an Automator `.app` and grant it Full Disk Access.
+
+### Creating an .app wrapper
+
+```bash
+# Create the AppleScript wrapper
+cat > /tmp/wrapper.applescript << 'EOF'
+on run
+    try
+        do shell script "/path/to/your/job.sh >> /path/to/log 2>&1"
+    on error errMsg
+        -- error already logged by the shell script, exit cleanly
+    end try
+end run
+EOF
+
+# Compile to .app
+osacompile -o ~/Applications/YourJob.app /tmp/wrapper.applescript
+```
+
+Then: **System Settings → Privacy & Security → Full Disk Access → add the .app**.
+
+Update your LaunchAgent plist to use the applet binary:
+```xml
+<key>Program</key>
+<string>/Users/you/Applications/YourJob.app/Contents/MacOS/applet</string>
+```
+
+### Critical: always use try/on error
+
+**Without `try/on error`**, if your script exits non-zero, AppleScript's `do shell script` raises an error. In a headless LaunchAgent this shows an invisible error dialog — the applet hangs forever, launchd thinks it's still running, and never restarts it. One failure = dead cron job until you manually `kill` the process.
+
+### macOS lock pattern
+
+`flock` doesn't exist on macOS. Use `mkdir` (atomic on POSIX):
+
+```bash
+LOCK_DIR="/tmp/jobname.lock.d"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    lock_age=$(( $(date +%s) - $(stat -f %m "$LOCK_DIR") ))
+    if (( lock_age > 600 )); then
+        rm -rf "$LOCK_DIR"
+        mkdir "$LOCK_DIR" 2>/dev/null || exit 0
+    else
+        exit 0  # another instance running
+    fi
+fi
+trap 'rm -rf "$LOCK_DIR"' EXIT
+```
+
+### After tccutil reset
+
+If you accidentally run `tccutil reset SystemPolicyAllFiles`, all FDA grants are wiped. Re-add your `.app` wrappers in System Settings. Running processes won't pick up new grants — kill existing PIDs so launchd restarts them with fresh TCC context.
+
 ## Files
 
 | File | Purpose |
