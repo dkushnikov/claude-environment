@@ -117,3 +117,15 @@ Key design decisions with rationale. Reference when you're making similar choice
 ### D27: Separate architecture docs from behavioral rules
 **Decision:** System architecture, storage models, and infrastructure belong in architecture/design docs. Protocols keep only behavioral rules (how Claude should act).
 **Why:** Protocols grew into mixed system design + behavioral rules. Splitting makes each document focused: architecture for understanding the system, protocol for following it.
+
+### D28: MCP server registration vs permissions — two different files
+**Decision:** Register MCP servers via `claude mcp add` (writes to `.claude.json`). Permissions for MCP tools go in `settings.json` (allow/deny rules). Two files, two purposes.
+**Why:** Common confusion: putting server definitions in `settings.json` `mcpServers` block. That works but mixes concerns. `claude mcp add` handles auth, env vars (`-e KEY=VALUE`), and server lifecycle. `settings.json` handles what tools are auto-approved.
+
+### D29: OS keychain for API keys, not env files
+**Decision:** API keys stored in OS keychain (macOS: `security add-generic-password`), exported via shell profile. MCP subprocesses receive keys through `-e` flag at `claude mcp add`.
+**Why:** Alternatives rejected: hardcoded in `settings.json` (git-tracked), `.env` files (plaintext on disk), `.secrets` file (same problem as `.env`). Keychain is encrypted, OS-managed, and doesn't require manual file protection.
+
+### D30: Server cron jobs must not auto-commit
+**Decision:** Background/cron jobs on the server must not run `git commit`. Only the primary machine commits (single-committer model from D17).
+**Why:** A vault audit cron job was auto-committing on the server. This caused divergence — the laptop's `git pull --ff-only` started failing because the server had commits that didn't exist on the laptop. Fix: removed commit step from all server job prompts. Obsidian Sync is the content source of truth; git is async archive with one writer.

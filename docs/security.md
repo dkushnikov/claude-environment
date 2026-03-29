@@ -6,12 +6,27 @@ How this framework handles secrets, personal data, and trust boundaries.
 
 | Secret type | Where it lives | Synced? |
 |-------------|---------------|---------|
-| API tokens, OAuth secrets | `config/*.env` (gitignored) | Never |
+| API tokens (MCP, etc.) | OS keychain (preferred) or `config/*.env` (gitignored) | Never |
 | gws credentials | OS keyring (`~/.config/gws/`) | Never |
 | SSH keys | `~/.ssh/` | Never |
 | OAuth refresh tokens | Per-tool storage (encrypted) | Never |
 
 **Rule:** if it grants access to an API, it stays on the machine. Zero secrets in git.
+
+**Preferred: OS keychain (D29).** Store API keys in the OS keychain, not plaintext files:
+
+```bash
+# Store (macOS):
+security add-generic-password -a "$USER" -s MY_API_KEY -w "sk-..." -U
+
+# Use in shell profile (~/.zshrc):
+export MY_API_KEY="$(security find-generic-password -a "$USER" -s MY_API_KEY -w 2>/dev/null)"
+
+# Pass to MCP servers at registration:
+claude mcp add my-server -e MY_API_KEY="$MY_API_KEY" -- command args
+```
+
+Alternatives rejected: hardcoded in `settings.json` (git-tracked), `.env` files (plaintext on disk). Keychain is encrypted, OS-managed, and survives shell profile changes.
 
 ## Personal data
 
