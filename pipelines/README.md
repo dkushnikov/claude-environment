@@ -78,7 +78,7 @@ Every pipeline has the same components:
 |-----------|------|---------|
 | Sync script | `bin/service-sync.py` | Fetch from API, write structured files |
 | Config | `config.json` (in L1 dir) | What to sync, credentials reference |
-| Job wrapper | `jobs/service-sync.sh` | Cron wrapper: lock, jitter, logging |
+| Job wrapper | `jobs/service-sync.sh` | Cron wrapper: lock, alerting, logging |
 | LaunchAgent | `launchd/com.user.service-sync.plist` | macOS scheduled task |
 | Status checker | `bin/service-status.sh` | CLI health check |
 | Claude command | `.claude/commands/service-sync.md` | Refresh L3 cache from L2 |
