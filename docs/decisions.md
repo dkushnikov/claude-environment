@@ -129,3 +129,39 @@ Key design decisions with rationale. Reference when you're making similar choice
 ### D30: Server cron jobs must not auto-commit
 **Decision:** Background/cron jobs on the server must not run `git commit`. Only the primary machine commits (single-committer model from D17).
 **Why:** A vault audit cron job was auto-committing on the server. This caused divergence — the laptop's `git pull --ff-only` started failing because the server had commits that didn't exist on the laptop. Fix: removed commit step from all server job prompts. Obsidian Sync is the content source of truth; git is async archive with one writer.
+
+## Knowledge & Reference Management
+
+### D31: Knowledge Store = separate vault, not `_inputs/` extension
+**Decision:** External sources (articles, books, ideas) get their own Obsidian vault, not a folder inside an existing vault.
+**Why:** External knowledge needs: own CLAUDE.md (identity), own commands, own git history, QMD collection, standalone sessions. `_inputs/` = transient pipeline data (gitignored). Shared = coordination bridge. Knowledge Store = permanent reference layer. Full framework: [knowledge-store.md](knowledge-store.md).
+
+### D32: No Atoms tier — Key Ideas embedded in extract files
+**Decision:** AI-extracted Key Ideas live inside extract files, not as separate atomic note files.
+**Why:** Zettelkasten atomic notes are valuable when a **human** writes them — the act of writing IS the understanding. When AI creates atoms, they become mechanical derivatives: many, contextless, orphaned quickly. Key Ideas in extract.md serve the same function (identify what's important) without creating maintenance burden. When an idea matures across 3+ sources, the human writes a Synthesis note — that's where understanding happens.
+
+### D33: Federated QMD search, not symlinks, for cross-vault knowledge
+**Decision:** Knowledge stores connect through QMD search at query time, not filesystem symlinks.
+**Why:** Symlinks break on mobile Obsidian (iOS/Android don't support them), corrupt backups, create tight coupling. QMD's `collection` parameter already supports per-collection queries. Adding a new knowledge store = one command (`qmd collection add`), zero impact on existing stores. Each store remains fully independent.
+
+### D34: Visibility = sharing intent, not security boundary
+**Decision:** The `visibility` field in knowledge extracts (`public|personal|company|private`) is a tag for future sharing decisions, not an access control mechanism.
+**Why:** All knowledge belongs to one person — there's no multi-user access control problem to solve. Visibility marks what *could* be shared if you wanted to: publish publicly, keep personal, or share with a work context. Convention-based, not enforced.
+
+### D35: Domains registry as cross-vault vocabulary
+**Decision:** Open list of domain slugs bridging knowledge stores to vault areas. Personal domains (no prefix), work domains (`org/` prefix).
+**Why:** A source about "AI strategy" is relevant to both personal career growth and company AI transformation. `domains: [career, org/ai]` bridges both contexts. Slugs map to vault areas but aren't coupled to folder names. New domains added as needed, documented in protocol.
+
+### D36: MCP model config persisted via env var override
+**Decision:** Custom model configurations for MCP servers (like PAL) stored in dotfiles and loaded via environment variable (`OPENROUTER_MODELS_CONFIG_PATH`).
+**Why:** MCP servers installed via `uvx` keep config in ephemeral cache — overwritten on package update. Env var override points to a git-tracked file in dotfiles. Survives updates, deploys to other machines via dotfiles sync.
+
+## Data Pipeline Hardening
+
+### D37: Pending-transcript status for incomplete syncs
+**Decision:** When a sync API returns file metadata but content isn't ready yet, mark as `pending-transcript` instead of `synced`.
+**Why:** Previous behavior marked records as "synced" despite no content → permanently skipped on subsequent runs. Separate status enables auto-retry on next sync cycle without manual intervention.
+
+### D38: Auto-extract at sync via lightweight model
+**Decision:** Generate a lightweight metadata card (title, summary, people, topics) from raw content at sync time using a fast/cheap model. Interactive extraction with full context (calendar, people profiles) happens separately.
+**Why:** Eliminates the "synced but unprocessed" backlog. Quick metadata enables search and triage without waiting for a human session. Opt-in flag (`--auto-extract`), fails silently if model unavailable.

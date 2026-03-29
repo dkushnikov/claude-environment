@@ -48,6 +48,25 @@ GNU Stow also doesn't fit — no templating, and environment.md requires machine
 - claude.ai MCP connectors — sync via account, visible in Code
 - `claude mcp serve` — Code as MCP server for Desktop (reverse bridge)
 
+## PKM Tool Landscape (March 2026)
+
+Evaluated 6 tools as alternatives/complements to Obsidian + Claude Code + QMD stack for knowledge management. Full analysis in [knowledge-store.md](knowledge-store.md#tool-landscape-2026).
+
+**Key finding:** Plain-text markdown on disk is the binding architectural constraint. Claude Code's Read/Write/Edit, QMD's indexing, git versioning, and cron automation all depend on file system access. Any tool with proprietary storage (protobuf, SQLite DB, cloud-only) breaks the chain.
+
+| Tool | Stars | Strength | Gap |
+|------|-------|----------|-----|
+| **AnyType** | 7K | Native objects + spaces + E2E encryption + local API + MCP | Protobuf format — no file access |
+| **Tana** | — | Supertags + AI auto-tagging + Meeting Agent + MCP | Cloud-only, no headless |
+| **Heptabase** | — | Visual canvas + spatial reasoning + markdown export | Multi-space immature |
+| **Capacities** | — | Schema-enforced objects + labeled graph edges | API too weak |
+| **Logseq** | 35K | Datalog queries + block-level linking + MCP servers | DB version abandons markdown |
+| **Khoj** | 34K | Self-hosted RAG + Obsidian plugin + automations | Vector-only (no BM25), PostgreSQL |
+
+**QMD confirmed best-in-class** for personal markdown search: BM25 + vector hybrid, local only, MCP-native, collection-based isolation.
+
+**Watch list:** AnyType (if cross-Space linking matures + markdown bridge). Readwise MCP (for capture UX).
+
 ## Future Research
 
 ### Multi-model routing

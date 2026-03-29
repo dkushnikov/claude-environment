@@ -35,6 +35,21 @@ Bottom layer: Project (CLAUDE.md + .claude/)
 
 **Limitation:** Skills and settings do NOT work via walk-up. Skills load only from `~/.claude/skills/` (global) and `<project>/.claude/skills/` (project-level). Intermediate levels are not scanned. Department/domain skills must be placed in each project's `.claude/skills/`.
 
+### Knowledge Store — cross-vault reference layer
+
+A new layer for external knowledge (articles, books, ideas) that serves all vaults via federated QMD search. Not inside any vault — a standalone vault with its own CLAUDE.md, git, and QMD collection.
+
+```
+Layer 1: Person (~/.claude/)          ← who I am
+Layer 2: Walk-up (vaults, projects)   ← what I work on
+Layer 3: Knowledge Store              ← what I learn from
+  Role: PARA "Resources" — external knowledge
+  Access: QMD collection (query-time federation)
+  Principle: AI does filing, human does understanding
+```
+
+This separates what you **create** (vault content) from what you **consume** (external sources). Full framework: [knowledge-store.md](knowledge-store.md). Decisions: D31-D36.
+
 ## Identity & Portability
 
 The architecture separates **person** (portable) from **role** (contextual).
