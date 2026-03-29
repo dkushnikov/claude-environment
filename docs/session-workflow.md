@@ -107,6 +107,47 @@ Before ending:
 2. Update TODO.md — close completed items, add new ones
 3. Commit changes
 
+## Session Management Architecture
+
+For projects with complex session needs (multiple domains, knowledge propagation, cross-project sync), the basic start/end protocol can be split into three files:
+
+```
+START                          END
+session-onboarding.md    →     session-offboarding.md (orchestrator)
+(project rule)                   Phase 1: Domain checklists
+  Phase 1: Context load          Phase 2: Universal checklist (TODO, memory, indexes)
+  Phase 2: Briefing              Phase 3: → session-log.md (shared)
+  Phase 3: Session setup                    log, rename, cross-project
+                                 Phase 4: Verify
+```
+
+| File | Location | Scope | Owns |
+|------|----------|-------|------|
+| `session-onboarding.md` | Project `.claude/rules/` | Project-specific | Context load, briefing, session setup |
+| `session-log.md` | Dotfiles `rules/` | Shared (all projects) | Log format, rename, cross-project messages |
+| `session-offboarding.md` | Project `.claude/rules/` | Project-specific | Knowledge propagation, verification |
+
+**Key insight:** Session log mechanics (format, naming, cross-project updates) are the same everywhere — they live in shared dotfiles. But what happens at start (context loading, data sources) and end (which checklists, what to verify) varies per project — those stay project-specific.
+
+Projects without an offboarding rule use `session-log.md` standalone — it works both as a standalone rule (triggered by session-end keywords) and as a delegated step within the offboarding orchestrator.
+
+### Offboarding Phases
+
+**Phase 1 — Domain checklists:** Identify which domains were touched in the session and run their specific checklists (e.g., infrastructure → deploy check, data pipelines → index update).
+
+**Phase 2 — Universal checklist:** Every session: update TODO.md, refresh memory, update index files, record decisions.
+
+**Phase 3 — Session log (shared):** Finalize the log, rename the session, send cross-project messages if insights are relevant to other projects.
+
+**Phase 4 — Verify:** All artifacts from the log exist, no deferred updates, documentation is consistent with changes.
+
+### Session Commands
+
+Two optional commands complement the architecture:
+
+- **`/wrap-up`** — triggers the full offboarding protocol. Executes all 4 phases without asking permission for each step.
+- **`/session-status`** — shows current state: what's done, what's pending, offboarding readiness. Useful mid-session or before wrapping up.
+
 ## Scaling
 
 This pattern works at any scale:

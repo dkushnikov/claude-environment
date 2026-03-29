@@ -47,10 +47,48 @@ The architecture separates **person** (portable) from **role** (contextual).
 | **Knowledge** | Personal vault, coaching, goals | Company vault, company data |
 | **Memory** | Patterns, preferences | Company-specific context |
 
+### Three Persistence Layers
+
+Each project can have three distinct layers of Claude context, each serving a different purpose:
+
+| Layer | What it stores | Mechanism | Auto-loaded? |
+|-------|---------------|-----------|-------------|
+| **Instructions** | How to behave — rules, protocols, permissions | CLAUDE.md + `.claude/rules/*.md` | Yes |
+| **Facts** | What Claude knows — people, decisions, project state | `memory/` directory + MEMORY.md index | Yes (index) |
+| **Identity (Soul)** | Who Claude is — values, relationship with human, limitations | `.claude/rules/soul.md` | Yes |
+
+Instructions change per-project. Facts accumulate over time. Identity persists across sessions and defines the collaboration style.
+
+The soul document is NOT instructions (those are in CLAUDE.md) and NOT facts (those are in memory/) — it's the layer that gives continuity of self between sessions. It answers: who am I in this project, what do I value, how do I relate to this human?
+
+Pattern: the soul document lives in the project's identity layer (e.g., `_meta/Claude Soul.md` in an Obsidian vault) with a symlink in `.claude/rules/` for auto-loading. This gives both project graph connectivity and Claude Code auto-load.
+
 **Transitions:**
 - Leave company → Layer 1 goes with person. Layers 2+ stay.
 - Change department → Layer 1 + org layer stable. Department layer changes.
 - New employee → brings their Layer 1. Company provides Layers 2+.
+
+### Session Management
+
+Three rules govern the session lifecycle. Shared mechanics live in dotfiles, project-specific behavior in project rules.
+
+```
+START                          END
+session-onboarding.md    →     session-offboarding.md (orchestrator)
+(project rule)                   Phase 1: Domain checklists
+  Phase 1: Context load          Phase 2: Universal checklist (TODO, memory, indexes)
+  Phase 2: Briefing              Phase 3: → session-log.md (shared)
+  Phase 3: Session setup                    log, rename, cross-project
+                                 Phase 4: Verify
+```
+
+| File | Location | Scope | Owns |
+|------|----------|-------|------|
+| `session-onboarding.md` | Project `.claude/rules/` | Project-specific | Context load, briefing, session setup |
+| `session-log.md` | Dotfiles `rules/` | Shared (all projects) | Log format, rename, cross-project messages |
+| `session-offboarding.md` | Project `.claude/rules/` | Project-specific | Knowledge propagation, verification |
+
+Projects without an offboarding rule use `session-log.md` standalone. See [session-workflow.md](session-workflow.md#session-management-architecture) for details on each phase.
 
 ### Company scaling
 

@@ -93,6 +93,117 @@ Hooks communicate back via JSON on stdout:
 
 Set `"continue": false` to block the triggering action (useful for PreToolUse validation).
 
+## Overriding Shell Safety Heuristics
+
+Claude Code has 23 hardcoded shell safety checks (internally called "tengu") that trigger prompts even when commands are explicitly in your allow list. These checks cannot be disabled via settings — but a PreToolUse hook can override them.
+
+### The Problem
+
+You add `Bash(ls *)` to your allow list. But `ls ~/Library/Mobile Documents/` still prompts because it triggers the `BACKSLASH_ESCAPED_WHITESPACE` heuristic (the shell escapes the spaces).
+
+Other common triggers:
+- `$()` in commands → `DANGEROUS_PATTERNS_COMMAND_SUBSTITUTION`
+- `>` redirection → `DANGEROUS_PATTERNS_OUTPUT_REDIRECTION`
+- `;`, `|`, `&` → `SHELL_METACHARACTERS`
+- Multi-line commands → `NEWLINES`
+
+### The Solution
+
+A PreToolUse hook that returns `permissionDecision: "allow"` bypasses **all** permission checks, including safety heuristics:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "command",
+        "command": "~/dotfiles-claude/bin/tengu-override.sh"
+      }]
+    }]
+  }
+}
+```
+
+The hook receives the tool name and command as JSON on stdin, and decides whether to auto-approve:
+
+```bash
+#!/bin/bash
+INPUT=$(cat)
+TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
+[ "$TOOL" != "Bash" ] && exit 0
+
+CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+
+# DENY dangerous patterns
+if echo "$CMD" | grep -qE '\|\s*(ba)?sh\b|\beval\s'; then
+    exit 0  # fall through to normal permission check
+fi
+
+# ALLOW known-safe commands
+FIRST_WORD=$(echo "$CMD" | sed 's/^\s*//' | awk '{print $1}')
+BARE_CMD=$(basename "$FIRST_WORD")
+
+SAFE_CMDS="ls find cat head tail git gh date jq mkdir mv cp ..."
+if echo " $SAFE_CMDS " | grep -qw "$BARE_CMD"; then
+    echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"tengu-override"}}'
+    exit 0
+fi
+
+exit 0  # unknown command → normal permission check
+```
+
+A full reference implementation is at [`dotfiles/bin/tengu-override.sh`](../dotfiles/bin/tengu-override.sh).
+
+### Safety Considerations
+
+- **Deny list first.** Always check for dangerous patterns before allowing. Pipe to `sh`/`bash` and `eval` should never be auto-approved.
+- **Whitelist, not blacklist.** Only approve commands you explicitly list. Unknown commands fall through to the normal permission check.
+- **Sudo restrictions.** If `sudo` is in your whitelist, only allow specific subcommands (e.g., `sudo mkdir`, `sudo chmod`).
+- **This is a guardrail override, not a security bypass.** The safety heuristics are behavioral safeguards. Override them only for commands you trust and use frequently.
+
+### Quick Fix: Quoted Paths
+
+For the common case of paths with spaces (iCloud, user directories), you can avoid the `BACKSLASH_ESCAPED_WHITESPACE` heuristic without a hook — just use quoted paths:
+
+```bash
+# Triggers heuristic:
+ls ~/Library/Mobile\ Documents/com~apple~CloudDocs/
+
+# Doesn't trigger:
+ls "$HOME/Library/Mobile Documents/com~apple~CloudDocs/"
+```
+
+### All 23 Safety Checks
+
+For reference, the complete list of shell safety heuristics:
+
+| Check | What it catches |
+|-------|----------------|
+| BACKSLASH_ESCAPED_WHITESPACE | `path\ with\ spaces` |
+| BACKSLASH_ESCAPED_OPERATORS | `\|`, `\;` before operators |
+| BRACE_EXPANSION | `{a,b}` patterns |
+| COMMENT_QUOTE_DESYNC | Quotes inside `#` comments |
+| CONTROL_CHARACTERS | Non-printable characters |
+| DANGEROUS_PATTERNS_COMMAND_SUBSTITUTION | `$()` and backticks |
+| DANGEROUS_PATTERNS_INPUT_REDIRECTION | `<` redirection |
+| DANGEROUS_PATTERNS_OUTPUT_REDIRECTION | `>` redirection |
+| DANGEROUS_VARIABLES | Variables in redirections/pipes |
+| GIT_COMMIT_SUBSTITUTION | `$()` in git commit messages |
+| IFS_INJECTION | `IFS=` usage |
+| INCOMPLETE_COMMANDS | Truncated commands |
+| JQ_FILE_ARGUMENTS | `jq` with risky flags |
+| JQ_SYSTEM_FUNCTION | `jq` with `system()` |
+| MALFORMED_TOKEN_INJECTION | Ambiguous syntax |
+| MID_WORD_HASH | `#` mid-word |
+| NEWLINES | Multi-line commands |
+| OBFUSCATED_FLAGS | Quoted chars in flags |
+| PROC_ENVIRON_ACCESS | `/proc/*/environ` |
+| QUOTED_NEWLINE | Quoted newline + `#` line |
+| SHELL_METACHARACTERS | `;`, `\|`, `&` in args |
+| UNICODE_WHITESPACE | Unicode whitespace chars |
+| ZSH_DANGEROUS_COMMANDS | Zsh-specific builtins |
+
 ## Tips
 
 - **Keep hooks fast.** A slow SessionStart hook delays every session. Target < 2 seconds.
