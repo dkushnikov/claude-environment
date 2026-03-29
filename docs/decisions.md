@@ -84,3 +84,48 @@ Key design decisions with rationale. Reference when you're making similar choice
 ### D19: Cron = one-shot + two-stream logging
 **Decision:** Execution logs go to `/var/log/claude/`. Results go to vault.
 **Why:** Simple observability. Logs + exit code alerting.
+
+### D20: Applet wrappers: `try/on error` mandatory
+**Decision:** All AppleScript `.app` wrappers for launchd must use `try/on error`.
+**Why:** `do shell script` raises an error on non-zero exit → applet hangs forever in headless LaunchAgent (error dialog with no UI). The `try/on error` pattern catches failures gracefully.
+
+### D21: No Syncthing — iCloud + FDA is sufficient
+**Decision:** Keep iCloud for data pipeline sync. No Syncthing.
+**Why:** FDA (Full Disk Access) for `.app` wrappers resolves TCC permission issues. Calendar/Health write to local `_inputs/` (not iCloud). Only voice recordings use iCloud (large audio files). Syncthing adds complexity without benefit.
+
+### D22: Single-writer model for cloud-synced folders
+**Decision:** Only one process may create/rename folders in cloud-synced directories (iCloud, Dropbox, etc.). Other processes use metadata files for display names.
+**Why:** Cloud storage is eventually consistent — multiple writers cause duplicate folders. Discovery: renaming 92 folders via Claude while iCloud sync was running created 92 duplicates. Fix: designate a single sync script as folder owner, use metadata (e.g., `extract.md` title) for display.
+
+### D23: Status field is canonical source of truth
+**Decision:** Pipeline processing status is tracked in a dedicated `status:` field, not inferred from timestamps like `processed_at:`.
+**Why:** Timestamps can be set during partial processing. `status:` explicitly represents the processing state. Discovered when 58 records had `processed_at:` filled but were not actually processed.
+
+### D24: Permission split — generic global, project-specific local
+**Decision:** Global `settings.json` covers CLI, git, system tools, package managers, MCP read-only. Local `settings.local.json` covers project-specific paths, domain commands, specialized WebFetch domains.
+**Why:** Reduces noise in templates. Global rules apply everywhere, local rules are project-specific. Allow rules merge across levels (not replaced). Deny from any level wins.
+
+### D25: Shell heuristic override via PreToolUse hook
+**Decision:** Use a PreToolUse hook to bypass shell safety heuristics for known-safe commands. Conservative whitelist of ~80 commands. Deny: pipe to `sh`/`bash`, `eval`.
+**Why:** 23 shell safety checks are hardcoded in the Claude Code binary and cannot be disabled via settings ([#30435](https://github.com/anthropics/claude-code/issues/30435), [#34106](https://github.com/anthropics/claude-code/issues/34106)). A PreToolUse hook returning `permissionDecision: "allow"` is the only override mechanism. Alternative rejected: `--dangerously-skip-permissions` (too broad, designed for containers).
+**Trade-off:** Hook adds ~50ms per Bash command. Acceptable for interactive sessions.
+
+### D26: `Bash(cmd *)` with space, not `Bash(cmd:*)`
+**Decision:** All permission patterns use space syntax: `Bash(command *)`.
+**Why:** The legacy `Bash(command:*)` syntax is deprecated and doesn't match compound commands (e.g., `ls ~/Library/...` won't match `Bash(ls:*)`). `Bash(command*)` without space matches both `command` and `commandSuffix` — use space to avoid false positives.
+
+### D27: Separate architecture docs from behavioral rules
+**Decision:** System architecture, storage models, and infrastructure belong in architecture/design docs. Protocols keep only behavioral rules (how Claude should act).
+**Why:** Protocols grew into mixed system design + behavioral rules. Splitting makes each document focused: architecture for understanding the system, protocol for following it.
+
+### D28: MCP server registration vs permissions — two different files
+**Decision:** Register MCP servers via `claude mcp add` (writes to `.claude.json`). Permissions for MCP tools go in `settings.json` (allow/deny rules). Two files, two purposes.
+**Why:** Common confusion: putting server definitions in `settings.json` `mcpServers` block. That works but mixes concerns. `claude mcp add` handles auth, env vars (`-e KEY=VALUE`), and server lifecycle. `settings.json` handles what tools are auto-approved.
+
+### D29: OS keychain for API keys, not env files
+**Decision:** API keys stored in OS keychain (macOS: `security add-generic-password`), exported via shell profile. MCP subprocesses receive keys through `-e` flag at `claude mcp add`.
+**Why:** Alternatives rejected: hardcoded in `settings.json` (git-tracked), `.env` files (plaintext on disk), `.secrets` file (same problem as `.env`). Keychain is encrypted, OS-managed, and doesn't require manual file protection.
+
+### D30: Server cron jobs must not auto-commit
+**Decision:** Background/cron jobs on the server must not run `git commit`. Only the primary machine commits (single-committer model from D17).
+**Why:** A vault audit cron job was auto-committing on the server. This caused divergence — the laptop's `git pull --ff-only` started failing because the server had commits that didn't exist on the laptop. Fix: removed commit step from all server job prompts. Obsidian Sync is the content source of truth; git is async archive with one writer.

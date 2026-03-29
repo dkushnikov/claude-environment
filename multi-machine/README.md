@@ -51,6 +51,8 @@ Server (daily cron)   → git pull --ff-only ─┘
 
 Server-generated files (cron reflections, audit reports) flow back via Obsidian Sync → laptop → committed in the next interactive session. Git is for history and rollback, not real-time sync.
 
+**Corollary: cron jobs must not auto-commit (D30).** If a server cron job includes `git commit` in its prompt, it becomes a second committer — breaking the single-committer model. This happened with a vault audit job: server auto-committed → `git pull --ff-only` on the laptop failed due to divergence. Fix: remove all commit steps from cron job prompts.
+
 **Vault-pull job** on the server keeps git state current for `git log` / `git blame`:
 
 ```bash
@@ -146,6 +148,20 @@ The `dotfiles-pull` job (cron, hourly) keeps the server in sync:
 ```bash
 cd ~/dotfiles-claude && git pull origin main
 ```
+
+## Gotchas
+
+### Permission grants can trigger bulk operations
+
+When you grant a new permission (e.g., Full Disk Access to a sync script), the first run may bulk-operate on stale state. Example: a voice recording sync script was blocked by TCC for 3 days. When FDA was granted, it re-downloaded 93 recordings into duplicate folders because its sync index was empty.
+
+**Prevention:** After granting new permissions, run the affected job with `--dry-run` first (if supported), or manually verify the sync state before the first real run.
+
+### Cloud storage is eventually consistent
+
+iCloud, Dropbox, and similar services are eventually consistent — files may take seconds to minutes to sync. If two processes (e.g., laptop Claude + server cron) write to the same cloud-synced directory, duplicates and conflicts are likely.
+
+**Pattern: single-writer model (D22).** Designate one process as the folder owner. Other processes read files but never create or rename folders. Use metadata files (e.g., frontmatter in markdown) for display names instead of folder names.
 
 ## Monitoring (basic)
 
