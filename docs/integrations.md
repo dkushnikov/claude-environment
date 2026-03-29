@@ -69,3 +69,24 @@ The Person / Shared / Role / Infrastructure split answers one question: **what h
 - **Infrastructure** services are re-provisioned (new SSH keys, new machine setup).
 
 This categorization also maps cleanly to the [layered model](architecture.md): Person = Layer 1, Role = organization/department layers, Infrastructure = machine-level.
+
+## MCP Model Config Persistence
+
+MCP servers installed via `uvx` (like PAL) store model configs in ephemeral cache (`~/.cache/uv/archive-v0/.../conf/`). These configs are overwritten on package update.
+
+**Pattern:** Use the server's env var override to point at a git-tracked config file:
+
+```json
+// In ~/.claude/settings.json → mcpServers:
+"pal": {
+  "command": "bash",
+  "args": ["-c", "source ~/.zshrc 2>/dev/null; exec uvx --from ... pal-mcp-server"],
+  "env": {
+    "OPENROUTER_MODELS_CONFIG_PATH": "~/dotfiles-claude/config/pal-openrouter-models.json"
+  }
+}
+```
+
+The config file lives in the dotfiles repo → git-tracked, syncs to all machines. Update models by editing the JSON and committing. Survives `uvx` cache invalidation.
+
+**Discovery:** PAL's `OpenRouterModelRegistry` checks `env_var_name="OPENROUTER_MODELS_CONFIG_PATH"` → falls back to bundled config. Other MCP servers may have similar override patterns — check their registry/config loader source code.
