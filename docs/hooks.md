@@ -155,12 +155,63 @@ exit 0  # unknown command → normal permission check
 
 A full reference implementation is at [`dotfiles/bin/tengu-override.sh`](../dotfiles/bin/tengu-override.sh).
 
+### Destructive Command Safety Net
+
+When you use `Bash(*)` in global settings (D40), Layer 1 auto-approves everything. The tengu-override hook becomes **the primary gate** — it does two jobs:
+
+1. **Auto-APPROVE** known-safe commands (bypass tengu false positives, same as before)
+2. **Force-ASK** on destructive commands (safety net even with `Bash(*)`)
+
+Force-prompt patterns to add to your hook. **Important:** scope checks by `BARE_CMD` (first command word) — otherwise patterns match inside arguments (e.g., `gh pr create --body "...git push --force..."` would false-positive on the git check):
+
+```bash
+# Extract first command word BEFORE destructive checks
+FIRST_WORD=$(echo "$CMD" | sed 's/^\s*//' | awk '{print $1}')
+BARE_CMD=$(basename "$FIRST_WORD")
+
+# ── DANGEROUS: force prompt even though Bash(*) would auto-approve ──
+
+# Pipe to shell / eval — unscoped (pipe position doesn't depend on first word)
+if echo "$CMD" | grep -qE '\|\s*(ba)?sh\b|\beval\s'; then
+    ask "pipe to shell or eval"
+fi
+
+# rm -rf with broad targets — only when first word is rm
+if [ "$BARE_CMD" = "rm" ]; then
+    if echo "$CMD" | grep -qE '\brm\s+.*-[a-zA-Z]*f.*\s+(\/(\s|$)|~|\.\.?(\s|$)|\*(\s|$))'; then
+        ask "rm -rf with broad target"
+    fi
+fi
+
+# dd, mkfs, shutdown/reboot — only when first word matches
+case "$BARE_CMD" in
+    dd|mkfs*|shutdown|reboot|halt) ask "destructive system command" ;;
+esac
+
+# git destructive ops — only when first word is git
+if [ "$BARE_CMD" = "git" ]; then
+    if echo "$CMD" | grep -qE '\bgit\s+(push\s+.*--force|reset\s+--hard|clean\s+.*-[a-zA-Z]*f)'; then
+        ask "destructive git command"
+    fi
+fi
+```
+
+The `ask()` helper returns `permissionDecision: "ask"`, which forces the normal permission prompt regardless of `Bash(*)`:
+
+```bash
+ask() {
+    echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"tengu-override: ⚠️ $1\"}}"
+    exit 0
+}
+```
+
 ### Safety Considerations
 
 - **Deny list first.** Always check for dangerous patterns before allowing. Pipe to `sh`/`bash` and `eval` should never be auto-approved.
 - **Whitelist, not blacklist.** Only approve commands you explicitly list. Unknown commands fall through to the normal permission check.
 - **Sudo restrictions.** If `sudo` is in your whitelist, only allow specific subcommands (e.g., `sudo mkdir`, `sudo chmod`).
 - **This is a guardrail override, not a security bypass.** The safety heuristics are behavioral safeguards. Override them only for commands you trust and use frequently.
+- **With `Bash(*)`, the hook IS the safety net.** Without it, everything auto-approves. Test the hook independently before enabling `Bash(*)`.
 
 ### Quick Fix: Quoted Paths
 

@@ -1,10 +1,12 @@
 #!/bin/bash
-# tengu-override.sh — Bypass Claude Code's shell safety heuristic prompts
-# for known-safe commands.
+# tengu-override.sh — Claude Code PreToolUse hook
 #
-# Claude Code has 23 hardcoded safety checks (backslash escaping, $(),
-# newlines, pipes, etc.) that prompt even when commands are in the allow list.
-# This PreToolUse hook auto-approves safe commands, bypassing those checks.
+# Two jobs:
+# 1. Auto-APPROVE known-safe commands (bypass tengu heuristic false positives)
+# 2. Force-ASK on destructive commands (safety net even with Bash(*) in allow)
+#
+# With Bash(*) in global settings, Layer 1 auto-approves everything.
+# This hook is now the primary gate for dangerous commands.
 #
 # Usage: Register in ~/.claude/settings.json → hooks.PreToolUse
 #
@@ -13,25 +15,136 @@
 
 INPUT=$(cat)
 TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
-[ "$TOOL" != "Bash" ] && exit 0
 
-CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
-[ -z "$CMD" ] && exit 0
-
-# ── DENY: never auto-approve these patterns ──
-if echo "$CMD" | grep -qE '\|\s*(ba)?sh\b|\|\s*zsh\b|\beval\s'; then
-    exit 0
-fi
-
-# ── Extract first command word ──
-FIRST_WORD=$(echo "$CMD" | sed 's/^\s*//' | awk '{print $1}')
-BARE_CMD=$(basename "$FIRST_WORD" 2>/dev/null || echo "$FIRST_WORD")
-
-# ── Helper ──
+# ── Helpers (must be defined before use) ──
 allow() {
     echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"tengu-override: $1\"}}"
     exit 0
 }
+
+ask() {
+    echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"tengu-override: ⚠️ $1\"}}"
+    exit 0
+}
+
+# ── Auto-approve non-Bash tools (WebSearch, WebFetch) ──
+case "$TOOL" in
+    Bash) ;; # continue to Bash logic below
+    WebSearch|WebFetch) allow "$TOOL auto-approve" ;;
+    *) exit 0 ;;
+esac
+
+CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+[ -z "$CMD" ] && exit 0
+
+# ── Extract first command word (needed for scoped checks below) ──
+FIRST_WORD=$(echo "$CMD" | sed 's/^\s*//' | awk '{print $1}')
+BARE_CMD=$(basename "$FIRST_WORD" 2>/dev/null || echo "$FIRST_WORD")
+
+# ── Nested command extraction ──
+# Handle launchers that wrap other commands — without this,
+# "xargs git push --force" has BARE_CMD=xargs and skips git checks.
+case "$BARE_CMD" in
+    xargs)
+        # xargs git push --force → inner = git
+        INNER_CMD=$(echo "$CMD" | sed -E 's/^\s*xargs\s+(-[^ ]+\s+)*//' | awk '{print $1}')
+        [ -n "$INNER_CMD" ] && BARE_CMD=$(basename "$INNER_CMD")
+        ;;
+    bash|sh|zsh)
+        # bash -c "rm -rf /" → extract command inside quotes
+        INNER=$(echo "$CMD" | sed -E 's/.*-c\s+["\047]?//' | sed -E 's/["\047]?\s*$//' | awk '{print $1}')
+        [ -n "$INNER" ] && BARE_CMD=$(basename "$INNER")
+        ;;
+    ssh|mosh)
+        # ssh server "dd if=..." → extract remote command
+        INNER=$(echo "$CMD" | sed -E "s/^\s*(ssh|mosh)\s+(-[^ ]+\s+)*[^ ]+\s+['\"]?//" | awk '{print $1}')
+        [ -n "$INNER" ] && BARE_CMD=$(basename "$INNER")
+        ;;
+    find)
+        # find . -exec rm -rf {} \; → extract command after -exec
+        if echo "$CMD" | grep -q '\-exec'; then
+            INNER=$(echo "$CMD" | sed -E 's/.*-exec\s+//' | awk '{print $1}')
+            [ -n "$INNER" ] && BARE_CMD=$(basename "$INNER")
+        fi
+        ;;
+    env)
+        # env VAR=val command → skip env vars, get command
+        INNER=$(echo "$CMD" | sed -E 's/^\s*env\s+([A-Z_][A-Z0-9_]*=[^ ]+\s+)*//' | awk '{print $1}')
+        [ -n "$INNER" ] && BARE_CMD=$(basename "$INNER")
+        ;;
+esac
+
+# ── DANGEROUS: force prompt even though Bash(*) would auto-approve ──
+# Scoped by BARE_CMD to avoid false positives when trigger strings
+# appear inside arguments (e.g., gh pr create --body "...git push --force...")
+
+# Pipe to shell / eval (injection vector) — unscoped, always check
+if echo "$CMD" | grep -qE '\|\s*(ba)?sh\b|\|\s*zsh\b|\beval\s'; then
+    ask "pipe to shell or eval"
+fi
+
+# rm -rf with broad targets (/, ~, ., *, ..)
+if [ "$BARE_CMD" = "rm" ]; then
+    if echo "$CMD" | grep -qE '\brm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+(-[a-zA-Z]*\s+)*|(-[a-zA-Z]*\s+)*-[a-zA-Z]*f[a-zA-Z]*\s+)(\/(\s|$)|~|\.\.?(\s|$)|\*(\s|$))'; then
+        ask "rm -rf with broad target"
+    fi
+    if echo "$CMD" | grep -qE '\brm\s+-(r|R)f\s*$'; then
+        ask "rm -rf with no target"
+    fi
+fi
+
+# dd — disk destroyer
+if [ "$BARE_CMD" = "dd" ]; then
+    ask "dd command"
+fi
+
+# mkfs — format filesystem
+if [ "$BARE_CMD" = "mkfs" ] || echo "$BARE_CMD" | grep -q '^mkfs'; then
+    ask "mkfs command"
+fi
+
+# shutdown / reboot
+case "$BARE_CMD" in
+    shutdown|reboot|halt) ask "system shutdown/reboot" ;;
+esac
+
+# git destructive operations
+if [ "$BARE_CMD" = "git" ]; then
+    if echo "$CMD" | grep -qE '\bgit\s+push\s+.*(-f|--force)\b'; then
+        ask "git push --force"
+    fi
+    if echo "$CMD" | grep -qE '\bgit\s+reset\s+--hard\b'; then
+        ask "git reset --hard"
+    fi
+    if echo "$CMD" | grep -qE '\bgit\s+clean\s+.*-[a-zA-Z]*f'; then
+        ask "git clean -f"
+    fi
+fi
+
+# shred / truncate (data destruction)
+case "$BARE_CMD" in
+    shred|truncate) ask "$BARE_CMD — data destruction" ;;
+esac
+
+# crontab -r (delete all cron jobs)
+if [ "$BARE_CMD" = "crontab" ] && echo "$CMD" | grep -qE '\s-r\b'; then
+    ask "crontab -r (delete all)"
+fi
+
+# docker system prune
+if [ "$BARE_CMD" = "docker" ] && echo "$CMD" | grep -q 'system prune'; then
+    ask "docker system prune"
+fi
+
+# General --force catch (any command not in the safe list)
+# Catches docker rm --force, kubectl delete --force, helm uninstall --force, etc.
+if echo "$CMD" | grep -qE '\s--force\b'; then
+    case "$BARE_CMD" in
+        brew|npm|pip|pip3|npx|bun) ;; # --force = reinstall, not destructive
+        git) ;; # handled above with specific sub-command checks
+        *) ask "$BARE_CMD --force" ;;
+    esac
+fi
 
 # ── Safe command whitelist ──
 # Customize this list for your environment. Add commands you use frequently
@@ -41,7 +154,7 @@ ls find cat head tail wc sort grep rg cut tr uniq diff
 echo printf date test which basename dirname realpath readlink
 stat file du md5 xxd jq hostname system_profiler pgrep
 git gh top ps sysctl vm_stat launchctl ping
-touch mkdir mv ln cp open chmod cd
+touch mkdir mv ln cp open chmod cd rm rmdir
 sed awk sips
 python3 pip3 pip brew npm npx bun uvx
 ssh scp mosh curl wget

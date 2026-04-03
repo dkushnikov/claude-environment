@@ -134,10 +134,36 @@ The only way to override Layer 3. A hook returning `permissionDecision: "allow"`
 
 **Split strategy:** Keep generic CLI/system commands in global settings. Keep project-specific paths, MCP tools, and domain commands in local settings. This reduces noise and makes templates reusable.
 
+## Permissions Audit
+
+Claude Code auto-appends one-off commands to your allow list during sessions. Over weeks, local settings grow from 20 rules to 200+ without anyone noticing. A permissions audit script (D41) detects this drift.
+
+### What it checks
+
+| Check | Severity | What it means |
+|-------|----------|---------------|
+| **Baseline drift** | Warning at +5, error at +15 | New rules added since baseline was saved |
+| **Duplicates** | Warning | Local rules already covered by global (e.g., `Bash(ls *)` when `Bash(*)` is global) |
+| **Invalid patterns** | Error | Double slashes, unexpanded `$VARS`, >120-char one-off commands |
+
+### Usage
+
+```bash
+# Show drift report
+permissions-audit.sh /path/to/project
+
+# Save current state as baseline (do this after cleanup)
+permissions-audit.sh --save-baseline /path/to/project
+```
+
+The baseline is saved to `_claude/cache/permissions-baseline.json`. Integrate into your vault audit or run after major permission cleanups.
+
+A reference implementation is at [`dotfiles/bin/permissions-audit.sh`](../dotfiles/bin/permissions-audit.sh).
+
 ## Recommendations
 
-1. **Audit `settings.json` regularly.** Approved tools accumulate. Remove what you don't need.
+1. **Audit `settings.json` regularly.** Use `permissions-audit.sh` to detect drift. Clean up after it flags issues.
 2. **Use `check.sh` before sharing.** It validates that no secrets leaked into git.
 3. **Rotate API tokens periodically.** Especially if a machine is compromised.
 4. **Private vault = laptop only.** No server, no sync, no cloud. If it's truly private, it stays on one device.
-5. **Use `Bash(cmd *)` with space, not `Bash(cmd:*)`** — the colon syntax is deprecated and doesn't match compound commands.
+5. **Consider `Bash(*)` + hook over per-command rules.** Per-command rules are security theater when `python3 *` and `ssh *` are already allowed. Move safety to a PreToolUse hook that force-prompts on destructive commands (D40). See [hooks.md](hooks.md#destructive-command-safety-net).
