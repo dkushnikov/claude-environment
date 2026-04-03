@@ -162,29 +162,37 @@ When you use `Bash(*)` in global settings (D40), Layer 1 auto-approves everythin
 1. **Auto-APPROVE** known-safe commands (bypass tengu false positives, same as before)
 2. **Force-ASK** on destructive commands (safety net even with `Bash(*)`)
 
-Force-prompt patterns to add to your hook:
+Force-prompt patterns to add to your hook. **Important:** scope checks by `BARE_CMD` (first command word) — otherwise patterns match inside arguments (e.g., `gh pr create --body "...git push --force..."` would false-positive on the git check):
 
 ```bash
+# Extract first command word BEFORE destructive checks
+FIRST_WORD=$(echo "$CMD" | sed 's/^\s*//' | awk '{print $1}')
+BARE_CMD=$(basename "$FIRST_WORD")
+
 # ── DANGEROUS: force prompt even though Bash(*) would auto-approve ──
 
-# Pipe to shell / eval (injection vector)
+# Pipe to shell / eval — unscoped (pipe position doesn't depend on first word)
 if echo "$CMD" | grep -qE '\|\s*(ba)?sh\b|\beval\s'; then
     ask "pipe to shell or eval"
 fi
 
-# rm -rf with broad targets (/, ~, ., *)
-if echo "$CMD" | grep -qE '\brm\s+.*-[a-zA-Z]*f.*\s+(\/(\s|$)|~|\.\.?(\s|$)|\*(\s|$))'; then
-    ask "rm -rf with broad target"
+# rm -rf with broad targets — only when first word is rm
+if [ "$BARE_CMD" = "rm" ]; then
+    if echo "$CMD" | grep -qE '\brm\s+.*-[a-zA-Z]*f.*\s+(\/(\s|$)|~|\.\.?(\s|$)|\*(\s|$))'; then
+        ask "rm -rf with broad target"
+    fi
 fi
 
-# dd, mkfs, shutdown/reboot
-if echo "$CMD" | grep -qE '^\s*(dd|mkfs|shutdown|reboot|halt)\b'; then
-    ask "destructive system command"
-fi
+# dd, mkfs, shutdown/reboot — only when first word matches
+case "$BARE_CMD" in
+    dd|mkfs*|shutdown|reboot|halt) ask "destructive system command" ;;
+esac
 
-# git force push / reset --hard / clean -f
-if echo "$CMD" | grep -qE '\bgit\s+(push\s+.*--force|reset\s+--hard|clean\s+.*-[a-zA-Z]*f)'; then
-    ask "destructive git command"
+# git destructive ops — only when first word is git
+if [ "$BARE_CMD" = "git" ]; then
+    if echo "$CMD" | grep -qE '\bgit\s+(push\s+.*--force|reset\s+--hard|clean\s+.*-[a-zA-Z]*f)'; then
+        ask "destructive git command"
+    fi
 fi
 ```
 
