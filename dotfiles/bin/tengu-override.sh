@@ -37,54 +37,56 @@ esac
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 [ -z "$CMD" ] && exit 0
 
-# ── DANGEROUS: force prompt even though Bash(*) would auto-approve ──
+# ── Extract first command word (needed for scoped checks below) ──
+FIRST_WORD=$(echo "$CMD" | sed 's/^\s*//' | awk '{print $1}')
+BARE_CMD=$(basename "$FIRST_WORD" 2>/dev/null || echo "$FIRST_WORD")
 
-# Pipe to shell / eval (injection vector)
+# ── DANGEROUS: force prompt even though Bash(*) would auto-approve ──
+# Scoped by BARE_CMD to avoid false positives when trigger strings
+# appear inside arguments (e.g., gh pr create --body "...git push --force...")
+
+# Pipe to shell / eval (injection vector) — unscoped, always check
 if echo "$CMD" | grep -qE '\|\s*(ba)?sh\b|\|\s*zsh\b|\beval\s'; then
     ask "pipe to shell or eval"
 fi
 
-# rm -rf with broad targets (/, ~, ., *)
-if echo "$CMD" | grep -qE '\brm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+(-[a-zA-Z]*\s+)*|(-[a-zA-Z]*\s+)*-[a-zA-Z]*f[a-zA-Z]*\s+)(\/(\s|$)|~|\.\.?(\s|$)|\*(\s|$))'; then
-    ask "rm -rf with broad target"
-fi
-if echo "$CMD" | grep -qE '\brm\s+-(r|R)f\s*$'; then
-    ask "rm -rf with no target"
+# rm -rf with broad targets (/, ~, ., *, ..)
+if [ "$BARE_CMD" = "rm" ]; then
+    if echo "$CMD" | grep -qE '\brm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+(-[a-zA-Z]*\s+)*|(-[a-zA-Z]*\s+)*-[a-zA-Z]*f[a-zA-Z]*\s+)(\/(\s|$)|~|\.\.?(\s|$)|\*(\s|$))'; then
+        ask "rm -rf with broad target"
+    fi
+    if echo "$CMD" | grep -qE '\brm\s+-(r|R)f\s*$'; then
+        ask "rm -rf with no target"
+    fi
 fi
 
 # dd — disk destroyer
-if echo "$CMD" | grep -qE '^\s*dd\s'; then
+if [ "$BARE_CMD" = "dd" ]; then
     ask "dd command"
 fi
 
 # mkfs — format filesystem
-if echo "$CMD" | grep -qE '^\s*mkfs'; then
+if [ "$BARE_CMD" = "mkfs" ] || echo "$BARE_CMD" | grep -q '^mkfs'; then
     ask "mkfs command"
 fi
 
 # shutdown / reboot
-if echo "$CMD" | grep -qE '^\s*(shutdown|reboot|halt)\b'; then
-    ask "system shutdown/reboot"
-fi
+case "$BARE_CMD" in
+    shutdown|reboot|halt) ask "system shutdown/reboot" ;;
+esac
 
-# git force push
-if echo "$CMD" | grep -qE '\bgit\s+push\s+.*(-f|--force)\b'; then
-    ask "git push --force"
+# git destructive operations
+if [ "$BARE_CMD" = "git" ]; then
+    if echo "$CMD" | grep -qE '\bgit\s+push\s+.*(-f|--force)\b'; then
+        ask "git push --force"
+    fi
+    if echo "$CMD" | grep -qE '\bgit\s+reset\s+--hard\b'; then
+        ask "git reset --hard"
+    fi
+    if echo "$CMD" | grep -qE '\bgit\s+clean\s+.*-[a-zA-Z]*f'; then
+        ask "git clean -f"
+    fi
 fi
-
-# git reset --hard
-if echo "$CMD" | grep -qE '\bgit\s+reset\s+--hard\b'; then
-    ask "git reset --hard"
-fi
-
-# git clean -f
-if echo "$CMD" | grep -qE '\bgit\s+clean\s+.*-[a-zA-Z]*f'; then
-    ask "git clean -f"
-fi
-
-# ── Extract first command word ──
-FIRST_WORD=$(echo "$CMD" | sed 's/^\s*//' | awk '{print $1}')
-BARE_CMD=$(basename "$FIRST_WORD" 2>/dev/null || echo "$FIRST_WORD")
 
 # ── Safe command whitelist ──
 # Customize this list for your environment. Add commands you use frequently
