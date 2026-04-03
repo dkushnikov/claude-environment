@@ -41,6 +41,39 @@ CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 FIRST_WORD=$(echo "$CMD" | sed 's/^\s*//' | awk '{print $1}')
 BARE_CMD=$(basename "$FIRST_WORD" 2>/dev/null || echo "$FIRST_WORD")
 
+# ── Nested command extraction ──
+# Handle launchers that wrap other commands — without this,
+# "xargs git push --force" has BARE_CMD=xargs and skips git checks.
+case "$BARE_CMD" in
+    xargs)
+        # xargs git push --force → inner = git
+        INNER_CMD=$(echo "$CMD" | sed -E 's/^\s*xargs\s+(-[^ ]+\s+)*//' | awk '{print $1}')
+        [ -n "$INNER_CMD" ] && BARE_CMD=$(basename "$INNER_CMD")
+        ;;
+    bash|sh|zsh)
+        # bash -c "rm -rf /" → extract command inside quotes
+        INNER=$(echo "$CMD" | sed -E 's/.*-c\s+["\047]?//' | sed -E 's/["\047]?\s*$//' | awk '{print $1}')
+        [ -n "$INNER" ] && BARE_CMD=$(basename "$INNER")
+        ;;
+    ssh|mosh)
+        # ssh server "dd if=..." → extract remote command
+        INNER=$(echo "$CMD" | sed -E "s/^\s*(ssh|mosh)\s+(-[^ ]+\s+)*[^ ]+\s+['\"]?//" | awk '{print $1}')
+        [ -n "$INNER" ] && BARE_CMD=$(basename "$INNER")
+        ;;
+    find)
+        # find . -exec rm -rf {} \; → extract command after -exec
+        if echo "$CMD" | grep -q '\-exec'; then
+            INNER=$(echo "$CMD" | sed -E 's/.*-exec\s+//' | awk '{print $1}')
+            [ -n "$INNER" ] && BARE_CMD=$(basename "$INNER")
+        fi
+        ;;
+    env)
+        # env VAR=val command → skip env vars, get command
+        INNER=$(echo "$CMD" | sed -E 's/^\s*env\s+([A-Z_][A-Z0-9_]*=[^ ]+\s+)*//' | awk '{print $1}')
+        [ -n "$INNER" ] && BARE_CMD=$(basename "$INNER")
+        ;;
+esac
+
 # ── DANGEROUS: force prompt even though Bash(*) would auto-approve ──
 # Scoped by BARE_CMD to avoid false positives when trigger strings
 # appear inside arguments (e.g., gh pr create --body "...git push --force...")
@@ -86,6 +119,21 @@ if [ "$BARE_CMD" = "git" ]; then
     if echo "$CMD" | grep -qE '\bgit\s+clean\s+.*-[a-zA-Z]*f'; then
         ask "git clean -f"
     fi
+fi
+
+# shred / truncate (data destruction)
+case "$BARE_CMD" in
+    shred|truncate) ask "$BARE_CMD — data destruction" ;;
+esac
+
+# crontab -r (delete all cron jobs)
+if [ "$BARE_CMD" = "crontab" ] && echo "$CMD" | grep -qE '\s-r\b'; then
+    ask "crontab -r (delete all)"
+fi
+
+# docker system prune
+if [ "$BARE_CMD" = "docker" ] && echo "$CMD" | grep -q 'system prune'; then
+    ask "docker system prune"
 fi
 
 # General --force catch (any command not in the safe list)
