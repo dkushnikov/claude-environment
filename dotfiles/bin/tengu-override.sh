@@ -88,6 +88,16 @@ if [ "$BARE_CMD" = "git" ]; then
     fi
 fi
 
+# General --force catch (any command not in the safe list)
+# Catches docker rm --force, kubectl delete --force, helm uninstall --force, etc.
+if echo "$CMD" | grep -qE '\s--force\b'; then
+    case "$BARE_CMD" in
+        brew|npm|pip|pip3|npx|bun) ;; # --force = reinstall, not destructive
+        git) ;; # handled above with specific sub-command checks
+        *) ask "$BARE_CMD --force" ;;
+    esac
+fi
+
 # ── Safe command whitelist ──
 # Customize this list for your environment. Add commands you use frequently
 # and trust. Remove any you're not comfortable auto-approving.
