@@ -165,3 +165,16 @@ Key design decisions with rationale. Reference when you're making similar choice
 ### D38: Auto-extract at sync via lightweight model
 **Decision:** Generate a lightweight metadata card (title, summary, people, topics) from raw content at sync time using a fast/cheap model. Interactive extraction with full context (calendar, people profiles) happens separately.
 **Why:** Eliminates the "synced but unprocessed" backlog. Quick metadata enables search and triage without waiting for a human session. Opt-in flag (`--auto-extract`), fails silently if model unavailable.
+
+### D39: Resolve symlinks and guard data_dir in pipeline scripts
+**Decision:** Pipeline scripts that accept a `--data-dir` argument must `Path.resolve()` (follow symlinks) and verify the resolved path ends with the expected directory name.
+**Why:** When vault symlinks point to a subdirectory of the data dir (e.g., `_inputs/Calendar → CloudDrive/Calendar/personal`), the script creates profile subdirs inside the subdir — `Calendar/personal/personal/days/` — and each subsequent cron run nests one level deeper. A guard like `if data_dir.name != "Calendar": sys.exit(1)` catches this immediately. Real incident: 76 levels of nesting, 6481 duplicate files, caused by a single wrong symlink target.
+
+### D40: `Bash(*)` replaces per-command rules
+**Decision:** Replace hundreds of individual `Bash(command *)` rules with a single `Bash(*)` in global settings. Move safety enforcement from Layer 1 (allow/deny patterns) to Layer 4 (PreToolUse hook).
+**Why:** Individual command rules are security theater — `python3 *` and `ssh *` already allow arbitrary code execution. Real protection comes from deny rules + the tengu-override hook (which force-prompts on destructive commands like `rm -rf`, `git push --force`, `dd`). Same applies to `WebFetch(domain:*)` replacing per-domain rules.
+**Trade-off:** Requires the tengu-override hook to be the safety net. Without it, everything auto-approves. See [hooks.md](hooks.md#destructive-command-safety-net).
+
+### D41: Permissions audit with baseline drift detection
+**Decision:** A `permissions-audit.sh` script compares current `settings.local.json` against a saved baseline, detecting rule accumulation, duplicates, and invalid patterns.
+**Why:** Claude Code auto-appends one-off commands to the allow list during sessions. Over time, local settings grow from 20 rules to 200+ without anyone noticing. The audit detects: drift from baseline (+5 = warning, +15 = error), local rules made redundant by global `Bash(*)`, invalid patterns (double slashes, unexpanded variables, >120-char one-off commands). Integrated into vault-audit as a standard layer.

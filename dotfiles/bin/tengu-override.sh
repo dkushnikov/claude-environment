@@ -1,10 +1,12 @@
 #!/bin/bash
-# tengu-override.sh — Bypass Claude Code's shell safety heuristic prompts
-# for known-safe commands.
+# tengu-override.sh — Claude Code PreToolUse hook
 #
-# Claude Code has 23 hardcoded safety checks (backslash escaping, $(),
-# newlines, pipes, etc.) that prompt even when commands are in the allow list.
-# This PreToolUse hook auto-approves safe commands, bypassing those checks.
+# Two jobs:
+# 1. Auto-APPROVE known-safe commands (bypass tengu heuristic false positives)
+# 2. Force-ASK on destructive commands (safety net even with Bash(*) in allow)
+#
+# With Bash(*) in global settings, Layer 1 auto-approves everything.
+# This hook is now the primary gate for dangerous commands.
 #
 # Usage: Register in ~/.claude/settings.json → hooks.PreToolUse
 #
@@ -13,25 +15,76 @@
 
 INPUT=$(cat)
 TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
-[ "$TOOL" != "Bash" ] && exit 0
+
+# ── Helpers (must be defined before use) ──
+allow() {
+    echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"tengu-override: $1\"}}"
+    exit 0
+}
+
+ask() {
+    echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"tengu-override: ⚠️ $1\"}}"
+    exit 0
+}
+
+# ── Auto-approve non-Bash tools (WebSearch, WebFetch) ──
+case "$TOOL" in
+    Bash) ;; # continue to Bash logic below
+    WebSearch|WebFetch) allow "$TOOL auto-approve" ;;
+    *) exit 0 ;;
+esac
 
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 [ -z "$CMD" ] && exit 0
 
-# ── DENY: never auto-approve these patterns ──
+# ── DANGEROUS: force prompt even though Bash(*) would auto-approve ──
+
+# Pipe to shell / eval (injection vector)
 if echo "$CMD" | grep -qE '\|\s*(ba)?sh\b|\|\s*zsh\b|\beval\s'; then
-    exit 0
+    ask "pipe to shell or eval"
+fi
+
+# rm -rf with broad targets (/, ~, ., *)
+if echo "$CMD" | grep -qE '\brm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+(-[a-zA-Z]*\s+)*|(-[a-zA-Z]*\s+)*-[a-zA-Z]*f[a-zA-Z]*\s+)(\/(\s|$)|~|\.\.?(\s|$)|\*(\s|$))'; then
+    ask "rm -rf with broad target"
+fi
+if echo "$CMD" | grep -qE '\brm\s+-(r|R)f\s*$'; then
+    ask "rm -rf with no target"
+fi
+
+# dd — disk destroyer
+if echo "$CMD" | grep -qE '^\s*dd\s'; then
+    ask "dd command"
+fi
+
+# mkfs — format filesystem
+if echo "$CMD" | grep -qE '^\s*mkfs'; then
+    ask "mkfs command"
+fi
+
+# shutdown / reboot
+if echo "$CMD" | grep -qE '^\s*(shutdown|reboot|halt)\b'; then
+    ask "system shutdown/reboot"
+fi
+
+# git force push
+if echo "$CMD" | grep -qE '\bgit\s+push\s+.*(-f|--force)\b'; then
+    ask "git push --force"
+fi
+
+# git reset --hard
+if echo "$CMD" | grep -qE '\bgit\s+reset\s+--hard\b'; then
+    ask "git reset --hard"
+fi
+
+# git clean -f
+if echo "$CMD" | grep -qE '\bgit\s+clean\s+.*-[a-zA-Z]*f'; then
+    ask "git clean -f"
 fi
 
 # ── Extract first command word ──
 FIRST_WORD=$(echo "$CMD" | sed 's/^\s*//' | awk '{print $1}')
 BARE_CMD=$(basename "$FIRST_WORD" 2>/dev/null || echo "$FIRST_WORD")
-
-# ── Helper ──
-allow() {
-    echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"tengu-override: $1\"}}"
-    exit 0
-}
 
 # ── Safe command whitelist ──
 # Customize this list for your environment. Add commands you use frequently
@@ -41,7 +94,7 @@ ls find cat head tail wc sort grep rg cut tr uniq diff
 echo printf date test which basename dirname realpath readlink
 stat file du md5 xxd jq hostname system_profiler pgrep
 git gh top ps sysctl vm_stat launchctl ping
-touch mkdir mv ln cp open chmod cd
+touch mkdir mv ln cp open chmod cd rm rmdir
 sed awk sips
 python3 pip3 pip brew npm npx bun uvx
 ssh scp mosh curl wget
